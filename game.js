@@ -21,6 +21,8 @@ let object = {
 };
 
 let score = 0;
+const scoreDisplay = document.getElementById('score');
+const catchSound = new Audio('catch-sound.mp3'); // Replace 'catch-sound.mp3' with your sound file
 
 function drawBasket() {
   ctx.fillStyle = '#0095DD';
@@ -53,6 +55,8 @@ function moveObject() {
     if (object.x > basket.x && object.x < basket.x + basket.width) {
       // Caught
       score++;
+      scoreDisplay.textContent = score;
+      catchSound.play();
       resetObject();
     } else {
       // Missed
@@ -96,3 +100,4 @@ document.addEventListener('keydown', keyDown);
 document.addEventListener('keyup', keyUp);
 
 update();
+
