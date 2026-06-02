@@ -1,0 +1,17 @@
+{
+  "name": "laundry-notifier",
+  "version": "1.0.0",
+  "description": "WhatsApp notification tool for laundry stores — notifies customers when their order is ready",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.9.8",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.23.0"
+  }
+}
