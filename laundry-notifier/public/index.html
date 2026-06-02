@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<!--
+  FILE: public/index.html
+  PURPOSE: The main webpage that shows in the browser.
+
+  CONCEPT TO LEARN: How a webpage talks to a backend
+    - HTML builds the structure (buttons, forms, tables)
+    - CSS makes it look nice
+    - JavaScript (app.js) fetches data from the backend API
+      and updates the page WITHOUT refreshing it.
+    - This pattern is called a "Single Page Application" (SPA)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laundry Notifier — WhatsApp Order Alerts</title>
+
+  <!-- Link to our CSS file for styling -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ======================================================
+    HEADER
+  ====================================================== -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-title">
+        <span class="header-icon">🧺</span>
+        <div>
+          <h1>Laundry Notifier</h1>
+          <p>Send WhatsApp alerts when dry cleaning is ready</p>
+        </div>
+      </div>
+
+      <!-- WhatsApp connection status badge -->
+      <!-- JavaScript will update this badge based on /api/status -->
+      <div id="wa-status" class="status-badge status-checking">
+        <span class="status-dot"></span>
+        <span id="wa-status-text">Checking WhatsApp…</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ====================================================
+      SECTION 1: ADD NEW ORDER FORM
+      This form lets the store owner add a customer order.
+    ==================================================== -->
+    <section class="card">
+      <h2 class="card-title">➕ Add New Customer Order</h2>
+
+      <form id="add-order-form">
+
+        <!-- Customer Name -->
+        <div class="form-group">
+          <label for="customer-name">Customer Name</label>
+          <input
+            type="text"
+            id="customer-name"
+            placeholder="e.g. Rahul Sharma"
+            required
+          />
+        </div>
+
+        <!-- Phone Number -->
+        <div class="form-group">
+          <label for="phone">
+            Phone Number
+            <span class="hint">Include country code, e.g. +919876543210</span>
+          </label>
+          <input
+            type="text"
+            id="phone"
+            placeholder="+919876543210"
+            required
+          />
+        </div>
+
+        <!-- Order Status -->
+        <div class="form-group">
+          <label for="status">Order Status</label>
+          <select id="status">
+            <option value="pending">Pending (not ready yet)</option>
+            <option value="ready">Ready (notify customer)</option>
+          </select>
+        </div>
+
+        <!-- Submit button -->
+        <button type="submit" class="btn btn-primary">
+          Add Order
+        </button>
+
+      </form>
+    </section>
+
+    <!-- ====================================================
+      SECTION 2: BULK NOTIFY BUTTON + STATS
+    ==================================================== -->
+    <section class="card action-bar">
+      <div class="stats" id="stats">
+        <!-- Filled in by JavaScript -->
+        <div class="stat"><span id="stat-total">0</span><small>Total Orders</small></div>
+        <div class="stat"><span id="stat-ready">0</span><small>Ready</small></div>
+        <div class="stat"><span id="stat-notified">0</span><small>Notified</small></div>
+        <div class="stat"><span id="stat-pending">0</span><small>Pending</small></div>
+      </div>
+
+      <button id="notify-all-btn" class="btn btn-whatsapp">
+        📲 Send WhatsApp to All Ready Orders
+      </button>
+    </section>
+
+    <!-- ====================================================
+      SECTION 3: ORDERS TABLE
+      This table shows all customer orders from the database.
+      JavaScript fetches the data and builds the table rows.
+    ==================================================== -->
+    <section class="card">
+      <div class="card-header-row">
+        <h2 class="card-title">📋 All Customer Orders</h2>
+        <button id="refresh-btn" class="btn btn-secondary btn-sm">↻ Refresh</button>
+      </div>
+
+      <!-- Loading and empty state messages -->
+      <p id="loading-msg" class="info-msg">Loading orders…</p>
+      <p id="empty-msg"   class="info-msg" style="display:none">No orders yet. Add your first customer above!</p>
+
+      <!-- The actual table — JavaScript will fill in the <tbody> -->
+      <div class="table-wrapper">
+        <table id="orders-table" style="display:none">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Customer Name</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Notified</th>
+              <th>Date Added</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <!-- JavaScript builds rows here dynamically -->
+          <tbody id="orders-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================
+    TOAST NOTIFICATION (pop-up message at the bottom)
+    JavaScript shows this for success/error messages.
+  ====================================================== -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Link our JavaScript file — placed at the END of body
+       so the HTML loads first, then JS runs -->
+  <script src="app.js"></script>
+
+</body>
+</html>

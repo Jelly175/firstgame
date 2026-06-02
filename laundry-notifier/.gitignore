@@ -1,0 +1,13 @@
+# node_modules is a huge folder of installed packages — never commit it
+# Anyone can recreate it by running "npm install"
+node_modules/
+
+# .env contains your passwords — NEVER commit this to GitHub!
+.env
+
+# WhatsApp saves your login session here so you don't re-scan QR every time
+.wwebjs_auth/
+.wwebjs_cache/
+
+# macOS creates this file automatically — not useful in the repo
+.DS_Store
