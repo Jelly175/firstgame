@@ -152,10 +152,10 @@ function buildMessage(customerName) {
     //`— Your Laundry Store`
 
     `Hi Sir 👋 \n\n` +
-    `We are working with laundry & dry cleaning stores to simplify daily operations like: \n\n` +
-    `• order tracking \n\n` +
-    `• pending payments \n\n` +
-    `• delivery management \n\n` +
+    `We are working with laundry & dry cleaning stores to simplify daily operations like: \n` +
+    `• order tracking \n` +
+    `• pending payments \n` +
+    `• delivery management \n` +
     `• customer WhatsApp updates \n\n` +
     `Wanted to understand — how are you currently managing your laundry operations? `
   );
