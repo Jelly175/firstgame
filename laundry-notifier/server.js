@@ -130,11 +130,19 @@ function buildMessage(customerName) {
   // Save the file, restart the app (Ctrl+C then npm start), done.
 
   return (
-    `Hello ${customerName}! 👋\n\n` +
-    `Your *dry cleaning order* is ready for pickup! 🧺✨\n\n` +
-    `Please visit our store within *72 hours* to collect your clothes.\n\n` +
-    `Thank you for choosing us! 🙏\n` +
-    `— Your Laundry Store`
+   // `Hello ${customerName}! 👋\n\n` +
+    //`Your *dry cleaning order* is ready for pickup! 🧺✨\n\n` +
+    //`Please visit our store within *72 hours* to collect your clothes.\n\n` +
+    //`Thank you for choosing us! 🙏\n` +
+    //`— Your Laundry Store`
+
+    `Hi Sir 👋 \n\n` +
+    `We are working with laundry & dry cleaning stores to simplify daily operations like: \n\n` +
+    `• order tracking \n\n` +
+    `• pending payments \n\n` +
+    `• delivery management \n\n` +
+    `• customer WhatsApp updates \n\n` +
+    `Wanted to understand — how are you currently managing your laundry operations? `
   );
 }
 
