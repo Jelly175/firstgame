@@ -119,6 +119,16 @@ function formatPhoneForWhatsApp(phone) {
 // HELPER FUNCTION: Build the WhatsApp message
 // ============================================================
 function buildMessage(customerName) {
+  // ✏️  EDIT THIS MESSAGE to whatever you want to send customers.
+  //
+  // Rules:
+  //   ${customerName}  →  automatically replaced with the customer's real name
+  //   \n\n             →  blank line / new paragraph
+  //   *word*           →  bold in WhatsApp
+  //   _word_           →  italic in WhatsApp
+  //
+  // Save the file, restart the app (Ctrl+C then npm start), done.
+
   return (
     `Hello ${customerName}! 👋\n\n` +
     `Your *dry cleaning order* is ready for pickup! 🧺✨\n\n` +
