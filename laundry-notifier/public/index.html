@@ -69,12 +69,12 @@
         <div class="form-group">
           <label for="phone">
             Phone Number
-            <span class="hint">Include country code, e.g. +919876543210</span>
+            <span class="hint">Indian numbers: 09876543210 or 9876543210 — country code added automatically</span>
           </label>
           <input
             type="text"
             id="phone"
-            placeholder="+919876543210"
+            placeholder="09876543210"
             required
           />
         </div>
@@ -97,7 +97,79 @@
     </section>
 
     <!-- ====================================================
-      SECTION 2: BULK NOTIFY BUTTON + STATS
+      SECTION 2: CSV BULK IMPORT
+      Lets the store owner upload a CSV file to add many
+      customers at once instead of one by one.
+    ==================================================== -->
+    <section class="card">
+      <h2 class="card-title">📂 Bulk Import from CSV</h2>
+
+      <!-- Instructions -->
+      <p class="csv-instructions">
+        Upload a <strong>.csv file</strong> with three columns:
+        <code>customer_name</code>, <code>phone</code>, <code>status</code><br/>
+        Phone numbers can be <code>09876543210</code> or <code>9876543210</code> — +91 is added automatically.
+      </p>
+
+      <!-- File drop zone — clicking this opens the file picker -->
+      <div class="csv-drop-zone" id="csv-drop-zone">
+        <!-- The real file input is hidden; the label triggers it -->
+        <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
+        <label for="csv-file-input" class="csv-label">
+          <span class="csv-icon">📄</span>
+          <span id="csv-label-text">Click to choose a .csv file</span>
+        </label>
+      </div>
+
+      <!-- Sample file download link -->
+      <p class="csv-hint">
+        Not sure about the format?
+        <a id="download-sample" href="#" class="csv-sample-link">Download a sample CSV</a>
+      </p>
+
+      <!-- ================================================
+        CSV PREVIEW AREA — hidden until a file is chosen.
+        JavaScript fills this in after parsing the file.
+      ================================================ -->
+      <div id="csv-preview-area" style="display:none">
+
+        <div class="csv-preview-header">
+          <p id="csv-preview-title">
+            Preview — <strong id="csv-row-count">0</strong> rows found
+          </p>
+          <button id="csv-clear-btn" class="btn btn-secondary btn-sm">✕ Clear</button>
+        </div>
+
+        <!-- Preview table showing what will be imported -->
+        <div class="table-wrapper">
+          <table class="csv-preview-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Customer Name</th>
+                <th>Phone (normalized)</th>
+                <th>Status</th>
+                <th>Valid?</th>
+              </tr>
+            </thead>
+            <!-- JavaScript builds these rows -->
+            <tbody id="csv-preview-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Error summary + import button -->
+        <div class="csv-import-bar">
+          <p id="csv-error-count" class="csv-error-note" style="display:none"></p>
+          <button id="csv-import-btn" class="btn btn-primary">
+            ✅ Import Valid Rows
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+      SECTION 3: BULK NOTIFY BUTTON + STATS
     ==================================================== -->
     <section class="card action-bar">
       <div class="stats" id="stats">

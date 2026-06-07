@@ -419,3 +419,136 @@ tr:hover td { background: #f8fafc; }
   .header-inner { flex-direction: column; align-items: flex-start; }
   .stats        { gap: 16px; }
 }
+
+/* ============================================================
+   CSV UPLOAD SECTION
+============================================================ */
+
+/* Instruction text above the file picker */
+.csv-instructions {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  margin-bottom: 16px;
+  line-height: 1.7;
+}
+
+.csv-instructions code {
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--color-primary);
+}
+
+/* The clickable file drop zone */
+.csv-drop-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: 10px;
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #f8fafc;
+  margin-bottom: 12px;
+}
+
+.csv-drop-zone:hover {
+  border-color: var(--color-primary);
+  background: #eff6ff;
+}
+
+/* The label acts as the visible button inside the drop zone */
+.csv-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.csv-icon { font-size: 2rem; }
+
+/* Hint text below the drop zone */
+.csv-hint {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  margin-bottom: 20px;
+}
+
+.csv-sample-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.csv-sample-link:hover { text-decoration: underline; }
+
+/* Header row of the preview area */
+.csv-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.csv-preview-header p {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+/* The preview table — same style as the main table */
+.csv-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+}
+
+.csv-preview-table thead {
+  background: #f8fafc;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.csv-preview-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
+}
+
+.csv-preview-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+/* Highlight invalid rows in light red */
+.csv-row-invalid td { background: #fff1f2; }
+
+/* Valid / invalid badges in the last column */
+.badge-valid   { background: #dcfce7; color: #15803d; }
+.badge-invalid { background: #ffe4e6; color: #dc2626; }
+
+/* Bottom bar with error count + import button */
+.csv-import-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+/* Red note showing how many rows will be skipped */
+.csv-error-note {
+  font-size: 0.85rem;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+

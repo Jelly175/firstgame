@@ -101,17 +101,32 @@ whatsappClient.on('disconnected', (reason) => {
 whatsappClient.initialize();
 
 // ============================================================
-// HELPER FUNCTION: Format phone number for WhatsApp
+// HELPER FUNCTION: Normalize Indian phone number for WhatsApp
 //
 // WhatsApp needs numbers in this format: "919876543210@c.us"
-// (country code + number, no + sign, then @c.us at the end)
+// (country code 91 + 10-digit number, no + sign, then @c.us)
 //
-// Example: +91 98765 43210  →  "919876543210@c.us"
+// This function handles ALL common Indian formats automatically:
+//   09876543210   (starts with 0, 11 digits) → 919876543210@c.us
+//   9876543210    (10 digits, no 0)           → 919876543210@c.us
+//   919876543210  (already has 91, 12 digits) → 919876543210@c.us
+//   +919876543210 (has +91)                   → 919876543210@c.us
 // ============================================================
 function formatPhoneForWhatsApp(phone) {
-  // Remove all non-numeric characters (spaces, dashes, +, brackets)
-  const cleaned = phone.replace(/\D/g, '');
-  // Add @c.us at the end — WhatsApp's format for phone numbers
+  // Step 1: Strip everything that is not a digit (removes +, spaces, dashes, brackets)
+  let cleaned = phone.replace(/\D/g, '');
+
+  // Step 2: Normalize to 12-digit format (91 + 10 digits)
+  if (cleaned.startsWith('0') && cleaned.length === 11) {
+    // e.g. 09876543210 → remove leading 0, add country code 91
+    cleaned = '91' + cleaned.slice(1);
+  } else if (cleaned.length === 10) {
+    // e.g. 9876543210 → just add country code 91
+    cleaned = '91' + cleaned;
+  }
+  // If already 12 digits starting with 91 → leave as-is
+
+  // Step 3: Add WhatsApp's required suffix
   return cleaned + '@c.us';
 }
 
@@ -349,6 +364,52 @@ app.post('/api/notify-all-ready', async (req, res) => {
     console.error('Error in bulk notify:', error);
     res.status(500).json({ error: 'Bulk notification failed' });
   }
+});
+
+// ----------------------------------------------------------
+// POST /api/orders/bulk
+// PURPOSE: Add MANY orders at once from a CSV upload.
+// The frontend sends: { orders: [ {customer_name, phone, status}, ... ] }
+// ----------------------------------------------------------
+app.post('/api/orders/bulk', async (req, res) => {
+  const { orders } = req.body;
+
+  // Validate that we actually received an array
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return res.status(400).json({ error: 'No orders provided' });
+  }
+
+  const results = [];
+  let added = 0;
+
+  // Loop through each row from the CSV and insert into DB
+  for (const order of orders) {
+    const { customer_name, phone, status } = order;
+
+    // Skip rows that are missing required fields
+    if (!customer_name || !phone) {
+      results.push({ name: customer_name, phone, success: false, reason: 'Missing name or phone' });
+      continue;
+    }
+
+    try {
+      await db.query(
+        'INSERT INTO orders (customer_name, phone, status) VALUES (?, ?, ?)',
+        [customer_name.trim(), phone.trim(), status || 'pending']
+      );
+      results.push({ name: customer_name, phone, success: true });
+      added++;
+    } catch (err) {
+      // If one row fails (e.g. duplicate), log it but continue with the rest
+      results.push({ name: customer_name, phone, success: false, reason: err.message });
+    }
+  }
+
+  res.json({
+    message: `Imported ${added} of ${orders.length} orders`,
+    added,
+    results
+  });
 });
 
 // ============================================================

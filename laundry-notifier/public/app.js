@@ -487,4 +487,334 @@ function escapeHtml(str) {
   // Check WhatsApp status now and then every 5 seconds
   checkWhatsAppStatus();
   setInterval(checkWhatsAppStatus, 5000);
+
+  // Set up CSV upload feature
+  initCSVUpload();
 })();
+
+
+// ============================================================
+// CSV UPLOAD FEATURE
+// Allows bulk importing customers from a .csv file.
+//
+// CONCEPT: FileReader API
+//   The browser has a built-in FileReader that can read files
+//   the user selects — without sending them to a server first.
+//   We read the CSV text in the browser, parse it ourselves,
+//   show a preview, then send the clean data to our backend.
+// ============================================================
+
+// Holds the parsed rows from the chosen CSV file
+let csvParsedRows = [];
+
+function initCSVUpload() {
+  const fileInput    = document.getElementById('csv-file-input');
+  const clearBtn     = document.getElementById('csv-clear-btn');
+  const importBtn    = document.getElementById('csv-import-btn');
+  const sampleLink   = document.getElementById('download-sample');
+  const dropZone     = document.getElementById('csv-drop-zone');
+
+  // When the user picks a file, read and preview it
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) readCSVFile(file);
+  });
+
+  // Support drag-and-drop onto the drop zone
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault(); // Required to allow dropping
+    dropZone.style.borderColor = 'var(--color-primary)';
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.style.borderColor = '';
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.csv')) {
+      readCSVFile(file);
+    } else {
+      showToast('Please drop a .csv file', 'error');
+    }
+  });
+
+  // Clear button — reset everything
+  clearBtn.addEventListener('click', clearCSVPreview);
+
+  // Import button — send valid rows to the backend
+  importBtn.addEventListener('click', importCSVOrders);
+
+  // Sample CSV download — creates a file in memory and triggers download
+  sampleLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    const sample =
+      'customer_name,phone,status\n' +
+      'Rahul Sharma,09876543210,ready\n' +
+      'Priya Patel,9123456789,pending\n' +
+      'Amit Kumar,09998887776,ready\n';
+
+    // Blob = a file-like object created in memory
+    const blob = new Blob([sample], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'sample_customers.csv';
+    a.click();
+    // Clean up the temporary URL
+    URL.revokeObjectURL(url);
+  });
+}
+
+
+// ============================================================
+// READ CSV FILE — Uses FileReader to load the file as text
+// ============================================================
+function readCSVFile(file) {
+  // Update the drop zone label to show the chosen filename
+  document.getElementById('csv-label-text').textContent = `📄 ${file.name}`;
+
+  // FileReader reads the file content as a text string
+  const reader = new FileReader();
+
+  // This runs AFTER the file is fully read
+  reader.onload = (e) => {
+    const text = e.target.result;   // Raw CSV text
+    csvParsedRows = parseCSV(text); // Convert to array of objects
+    renderCSVPreview(csvParsedRows);
+  };
+
+  reader.onerror = () => showToast('Could not read the file', 'error');
+
+  // Start reading — fires the onload event above when done
+  reader.readAsText(file);
+}
+
+
+// ============================================================
+// PARSE CSV — Convert raw CSV text into an array of objects
+//
+// Handles:
+//   - Header row detection (skips it automatically)
+//   - Quoted fields containing commas e.g. "Sharma, Rahul"
+//   - Extra spaces, blank lines
+// ============================================================
+function parseCSV(text) {
+  // Split into lines, trim whitespace, remove empty lines
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+
+  if (lines.length === 0) return [];
+
+  // Auto-detect if the first row is a header
+  // If it contains "name", "phone", or "status" → it's a header, skip it
+  const firstLineLower = lines[0].toLowerCase();
+  const isHeader =
+    firstLineLower.includes('name') ||
+    firstLineLower.includes('phone') ||
+    firstLineLower.includes('status');
+
+  const dataLines = isHeader ? lines.slice(1) : lines;
+
+  return dataLines.map((line) => {
+    const cols = splitCSVLine(line); // Split by comma (handles quoted commas)
+    return {
+      customer_name: (cols[0] || '').trim(),
+      phone:         (cols[1] || '').trim(),
+      status:        normalizeCSVStatus((cols[2] || '').trim())
+    };
+  });
+}
+
+
+// ============================================================
+// SPLIT CSV LINE — Handles commas inside quoted fields
+// e.g. "Sharma, Rahul",09876543210,ready  →  3 separate values
+// ============================================================
+function splitCSVLine(line) {
+  const result = [];
+  let current  = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      inQuotes = !inQuotes; // Toggle: entering or leaving a quoted block
+    } else if (char === ',' && !inQuotes) {
+      result.push(current); // Comma outside quotes = column separator
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current); // Push the last column
+  return result;
+}
+
+
+// ============================================================
+// NORMALIZE STATUS — Accept flexible status values from CSV
+// e.g. "Ready", "READY", "ready" → all become "ready"
+// ============================================================
+function normalizeCSVStatus(status) {
+  const s = status.toLowerCase().replace(/\s/g, '_');
+  if (s === 'ready')                    return 'ready';
+  if (s === 'picked_up' || s === 'pickedup') return 'picked_up';
+  return 'pending'; // Default for blank, "pending", or unknown values
+}
+
+
+// ============================================================
+// NORMALIZE PHONE (frontend copy — mirrors server.js logic)
+// Used for preview validation before sending to backend.
+// ============================================================
+function normalizePhonePreview(phone) {
+  let cleaned = phone.replace(/\D/g, ''); // Remove non-digits
+  if (cleaned.startsWith('0') && cleaned.length === 11) {
+    cleaned = '91' + cleaned.slice(1);    // 09876543210 → 919876543210
+  } else if (cleaned.length === 10) {
+    cleaned = '91' + cleaned;             // 9876543210  → 919876543210
+  }
+  return cleaned;
+}
+
+
+// ============================================================
+// VALIDATE CSV ROW — Check if a row has the minimum required data
+// ============================================================
+function validateCSVRow(row) {
+  const errors = [];
+
+  if (!row.customer_name) {
+    errors.push('Missing name');
+  }
+
+  const normalizedPhone = normalizePhonePreview(row.phone);
+  if (!row.phone || normalizedPhone.length < 12) {
+    errors.push('Invalid phone');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+
+// ============================================================
+// RENDER CSV PREVIEW — Show the parsed rows in a table
+//   so the user can review before importing
+// ============================================================
+function renderCSVPreview(rows) {
+  const previewArea  = document.getElementById('csv-preview-area');
+  const tbody        = document.getElementById('csv-preview-tbody');
+  const rowCountEl   = document.getElementById('csv-row-count');
+  const errorCountEl = document.getElementById('csv-error-count');
+
+  if (rows.length === 0) {
+    showToast('No data rows found in the CSV file', 'error');
+    return;
+  }
+
+  // Count valid vs invalid rows
+  let invalidCount = 0;
+  tbody.innerHTML = '';
+
+  rows.forEach((row, index) => {
+    const { valid, errors } = validateCSVRow(row);
+    if (!valid) invalidCount++;
+
+    const normalizedPhone = row.phone ? normalizePhonePreview(row.phone) : '—';
+
+    const tr = document.createElement('tr');
+    if (!valid) tr.classList.add('csv-row-invalid');
+
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${escapeHtml(row.customer_name) || '<em style="color:#94a3b8">empty</em>'}</td>
+      <td>
+        ${escapeHtml(row.phone)}
+        ${valid ? `<br/><small style="color:#64748b">→ +${normalizedPhone}</small>` : ''}
+      </td>
+      <td><span class="badge badge-${row.status}">${statusLabel(row.status)}</span></td>
+      <td>
+        <span class="badge ${valid ? 'badge-valid' : 'badge-invalid'}">
+          ${valid ? '✓ OK' : '✗ ' + errors.join(', ')}
+        </span>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  // Update row count and error message
+  rowCountEl.textContent = rows.length;
+
+  if (invalidCount > 0) {
+    errorCountEl.textContent =
+      `⚠️ ${invalidCount} invalid row${invalidCount > 1 ? 's' : ''} will be skipped`;
+    errorCountEl.style.display = 'block';
+  } else {
+    errorCountEl.style.display = 'none';
+  }
+
+  // Show the preview section
+  previewArea.style.display = 'block';
+}
+
+
+// ============================================================
+// IMPORT CSV ORDERS — Send valid rows to POST /api/orders/bulk
+// ============================================================
+async function importCSVOrders() {
+  // Filter to only valid rows
+  const validRows = csvParsedRows.filter((row) => validateCSVRow(row).valid);
+
+  if (validRows.length === 0) {
+    showToast('No valid rows to import', 'error');
+    return;
+  }
+
+  const importBtn = document.getElementById('csv-import-btn');
+  importBtn.disabled    = true;
+  importBtn.textContent = `⏳ Importing ${validRows.length} orders…`;
+
+  try {
+    const res  = await fetch('/api/orders/bulk', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ orders: validRows })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(`✅ Imported ${data.added} orders successfully!`, 'success');
+      clearCSVPreview();  // Reset the CSV section
+      await loadOrders(); // Refresh the main orders table
+    } else {
+      showToast(data.error || 'Import failed', 'error');
+    }
+  } catch {
+    showToast('Could not reach the server', 'error');
+  } finally {
+    importBtn.disabled    = false;
+    importBtn.textContent = '✅ Import Valid Rows';
+  }
+}
+
+
+// ============================================================
+// CLEAR CSV PREVIEW — Reset the upload section to its initial state
+// ============================================================
+function clearCSVPreview() {
+  csvParsedRows = [];
+  document.getElementById('csv-preview-area').style.display  = 'none';
+  document.getElementById('csv-preview-tbody').innerHTML     = '';
+  document.getElementById('csv-label-text').textContent      = 'Click to choose a .csv file';
+  document.getElementById('csv-error-count').style.display   = 'none';
+
+  // Reset the file input so the same file can be re-selected if needed
+  const fileInput   = document.getElementById('csv-file-input');
+  fileInput.value   = '';
+}
