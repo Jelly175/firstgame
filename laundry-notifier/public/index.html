@@ -171,18 +171,53 @@
     <!-- ====================================================
       SECTION 3: BULK NOTIFY BUTTON + STATS
     ==================================================== -->
-    <section class="card action-bar">
-      <div class="stats" id="stats">
-        <!-- Filled in by JavaScript -->
-        <div class="stat"><span id="stat-total">0</span><small>Total Orders</small></div>
-        <div class="stat"><span id="stat-ready">0</span><small>Ready</small></div>
-        <div class="stat"><span id="stat-notified">0</span><small>Notified</small></div>
-        <div class="stat"><span id="stat-pending">0</span><small>Pending</small></div>
+    <section class="card">
+
+      <!-- Safety warning — always visible above the send button -->
+      <div class="safety-warning">
+        <span class="safety-icon">⚠️</span>
+        <div>
+          <strong>Safe Sending Limits</strong>
+          <span>Max <strong>30 messages per run</strong> · <strong>20–45 second gaps</strong> between each · keeps your number safe from blocks</span>
+        </div>
       </div>
 
-      <button id="notify-all-btn" class="btn btn-whatsapp">
-        📲 Send WhatsApp to All Ready Orders
-      </button>
+      <!-- Stats + button row -->
+      <div class="action-bar">
+        <div class="stats" id="stats">
+          <!-- Filled in by JavaScript -->
+          <div class="stat"><span id="stat-total">0</span><small>Total Orders</small></div>
+          <div class="stat"><span id="stat-ready">0</span><small>Ready</small></div>
+          <div class="stat"><span id="stat-notified">0</span><small>Notified</small></div>
+          <div class="stat"><span id="stat-pending">0</span><small>Pending</small></div>
+        </div>
+
+        <button id="notify-all-btn" class="btn btn-whatsapp">
+          📲 Send WhatsApp to All Ready Orders
+        </button>
+      </div>
+
+      <!-- ================================================
+        PROGRESS AREA — hidden until a bulk send starts.
+        JavaScript shows and updates this in real time.
+      ================================================ -->
+      <div id="progress-area" style="display:none">
+        <div class="progress-header">
+          <span id="progress-label">Preparing…</span>
+          <span id="progress-fraction">0 / 0</span>
+        </div>
+
+        <!-- Progress bar track + fill -->
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div class="progress-footer">
+          <span id="progress-current">Starting…</span>
+          <span id="progress-queued"></span>
+        </div>
+      </div>
+
     </section>
 
     <!-- ====================================================

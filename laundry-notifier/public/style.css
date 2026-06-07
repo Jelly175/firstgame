@@ -421,6 +421,87 @@ tr:hover td { background: #f8fafc; }
 }
 
 /* ============================================================
+   SAFETY WARNING BANNER
+============================================================ */
+.safety-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.88rem;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.safety-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+.safety-warning div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.safety-warning strong {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #78350f;
+}
+
+/* ============================================================
+   PROGRESS BAR
+============================================================ */
+#progress-area {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* The grey track that holds the green fill */
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+/* The green fill — width is set by JavaScript as % */
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--color-whatsapp);
+  border-radius: 999px;
+  transition: width 0.5s ease;  /* Smooth animation as it grows */
+}
+
+.progress-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+#progress-queued {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+/* ============================================================
    CSV UPLOAD SECTION
 ============================================================ */
 

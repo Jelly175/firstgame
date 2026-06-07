@@ -358,36 +358,145 @@ async function deleteOrder(id) {
 
 // ============================================================
 // NOTIFY ALL READY — POST /api/notify-all-ready
+// After clicking, we poll GET /api/notify-progress every 3s
+// to show live progress without freezing the page.
 // ============================================================
 notifyAllBtn.addEventListener('click', async () => {
   const confirmed = confirm(
-    'Send WhatsApp to ALL customers with "Ready" status?\n(Only sends to those not yet notified.)'
+    `Send WhatsApp to ALL customers with "Ready" status?\n\n` +
+    `• Max 30 messages per run\n` +
+    `• 20–45 second gaps between each message\n` +
+    `• This will take 10–20 minutes for a full batch\n\n` +
+    `Only customers not yet notified will receive a message.`
   );
   if (!confirmed) return;
 
-  notifyAllBtn.disabled     = true;
-  notifyAllBtn.textContent  = '⏳ Sending…';
+  notifyAllBtn.disabled    = true;
+  notifyAllBtn.textContent = '⏳ Starting…';
 
   try {
     const res  = await fetch(API.notifyAll, { method: 'POST' });
     const data = await res.json();
 
     if (res.ok) {
-      showToast(
-        `📲 Sent ${data.count} WhatsApp message${data.count !== 1 ? 's' : ''}!`,
-        'success'
-      );
-      await loadOrders();
+      if (data.total === 0) {
+        showToast('No unnotified ready orders found', 'default');
+        notifyAllBtn.disabled    = false;
+        notifyAllBtn.textContent = '📲 Send WhatsApp to All Ready Orders';
+        return;
+      }
+
+      // Show progress area and start polling
+      showProgressArea();
+      startProgressPolling();
+
+      if (data.queued > 0) {
+        showToast(
+          `Sending ${data.total} now · ${data.queued} more queued for next run`,
+          'default'
+        );
+      }
     } else {
-      showToast(data.error || 'Bulk send failed', 'error');
+      showToast(data.error || 'Failed to start bulk send', 'error');
+      notifyAllBtn.disabled    = false;
+      notifyAllBtn.textContent = '📲 Send WhatsApp to All Ready Orders';
     }
   } catch {
-    showToast('Server error during bulk send', 'error');
-  } finally {
+    showToast('Server error — is the app running?', 'error');
     notifyAllBtn.disabled    = false;
     notifyAllBtn.textContent = '📲 Send WhatsApp to All Ready Orders';
   }
 });
+
+
+// ============================================================
+// PROGRESS POLLING — Calls /api/notify-progress every 3 seconds
+// ============================================================
+let progressPollTimer = null;
+
+function startProgressPolling() {
+  // Poll immediately, then every 3 seconds
+  pollProgress();
+  progressPollTimer = setInterval(pollProgress, 3000);
+}
+
+function stopProgressPolling() {
+  clearInterval(progressPollTimer);
+  progressPollTimer = null;
+}
+
+async function pollProgress() {
+  try {
+    const res  = await fetch('/api/notify-progress');
+    const data = await res.json();
+
+    updateProgressUI(data);
+
+    // Stop polling once the run is finished
+    if (!data.running && data.finishedAt) {
+      stopProgressPolling();
+      onBulkSendComplete(data);
+    }
+  } catch {
+    // Server unreachable — stop polling
+    stopProgressPolling();
+  }
+}
+
+function showProgressArea() {
+  document.getElementById('progress-area').style.display = 'block';
+}
+
+function hideProgressArea() {
+  document.getElementById('progress-area').style.display = 'none';
+}
+
+function updateProgressUI(data) {
+  const pct      = data.total > 0 ? Math.round((data.sent / data.total) * 100) : 0;
+  const fill     = document.getElementById('progress-fill');
+  const label    = document.getElementById('progress-label');
+  const fraction = document.getElementById('progress-fraction');
+  const current  = document.getElementById('progress-current');
+  const queued   = document.getElementById('progress-queued');
+
+  // Animate the bar width
+  fill.style.width = pct + '%';
+
+  if (data.running) {
+    label.textContent    = `Sending… (${pct}%)`;
+    fraction.textContent = `${data.sent} / ${data.total} sent`;
+    current.textContent  = data.currentName
+      ? `Now sending to: ${data.currentName}`
+      : 'Waiting…';
+  } else if (data.finishedAt) {
+    label.textContent    = `Done — ${data.sent} sent, ${data.failed} failed`;
+    fraction.textContent = `${data.sent} / ${data.total}`;
+    current.textContent  = '';
+    fill.style.background = data.failed > 0 ? 'var(--color-warning)' : 'var(--color-whatsapp)';
+  }
+
+  queued.textContent = data.queued > 0
+    ? `${data.queued} more ready to send in next run`
+    : '';
+}
+
+function onBulkSendComplete(data) {
+  // Re-enable the button
+  notifyAllBtn.disabled    = false;
+  notifyAllBtn.textContent = '📲 Send WhatsApp to All Ready Orders';
+
+  // Show final toast
+  const msg = data.failed > 0
+    ? `Done: ${data.sent} sent · ${data.failed} failed`
+    : `✅ All ${data.sent} messages sent successfully!`;
+  showToast(msg, data.failed > 0 ? 'default' : 'success');
+
+  // Refresh the orders table to show updated "Notified" column
+  loadOrders();
+
+  // Hide the progress bar after 8 seconds
+  setTimeout(hideProgressArea, 8000);
+}
 
 
 // ============================================================

@@ -162,11 +162,59 @@ function buildMessage(customerName) {
 }
 
 // ============================================================
-// API ROUTES
+// SAFE MESSAGING CONFIGURATION
 //
-// CONCEPT: A "route" is a URL path + an HTTP method.
-// When the frontend calls a URL, Express runs the matching function.
+// WHY THIS MATTERS:
+//   WhatsApp monitors accounts that send many identical messages
+//   rapidly. If you send 80 messages with a 2-second gap, it
+//   looks exactly like spam — and they block your number.
+//
+//   Safe rules:
+//     - Random delay between messages (looks human, not a bot)
+//     - Max 30 messages per run (spread the rest across hours)
+//     - These values are configurable in your .env file
 // ============================================================
+const MAX_BULK_PER_RUN  = parseInt(process.env.MAX_BULK_PER_RUN   || '30');
+const DELAY_MIN_SEC     = parseInt(process.env.MESSAGE_DELAY_MIN   || '20');
+const DELAY_MAX_SEC     = parseInt(process.env.MESSAGE_DELAY_MAX   || '45');
+
+// Returns a Promise that resolves after a RANDOM wait between min and max seconds
+// Random = harder for WhatsApp to detect as automated
+function randomDelay() {
+  const ms = Math.floor(
+    Math.random() * (DELAY_MAX_SEC - DELAY_MIN_SEC + 1) + DELAY_MIN_SEC
+  ) * 1000;
+  console.log(`   ⏳ Waiting ${(ms / 1000).toFixed(0)}s before next message...`);
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ============================================================
+// PROGRESS TRACKER
+//
+// CONCEPT: Global state object
+//   Because the bulk send loop runs in the background (after the
+//   HTTP response is already sent), we store progress here.
+//   The frontend polls GET /api/notify-progress to read it.
+// ============================================================
+let notifyProgress = {
+  running:     false,   // Is a bulk send currently happening?
+  total:       0,       // How many messages to send this run
+  sent:        0,       // How many sent so far
+  failed:      0,       // How many failed
+  queued:      0,       // How many are waiting for the NEXT run
+  currentName: '',      // The customer being messaged right now
+  results:     [],
+  finishedAt:  null
+};
+
+// ----------------------------------------------------------
+// GET /api/notify-progress
+// PURPOSE: Let the frontend check real-time bulk-send progress.
+//   Frontend calls this every 3 seconds while a send is running.
+// ----------------------------------------------------------
+app.get('/api/notify-progress', (req, res) => {
+  res.json(notifyProgress);
+});
 
 // ----------------------------------------------------------
 // GET /api/status
@@ -310,8 +358,19 @@ app.post('/api/orders/:id/notify', async (req, res) => {
 
 // ----------------------------------------------------------
 // POST /api/notify-all-ready
-// PURPOSE: Send WhatsApp to ALL customers with status "ready"
-//          who haven't been notified yet
+// PURPOSE: Send WhatsApp to customers with status "ready" (safe version)
+//
+// HOW IT WORKS (beginner explanation):
+//   1. We respond to the frontend IMMEDIATELY (so the page doesn't freeze)
+//   2. The actual sending loop runs in the background
+//   3. The frontend polls GET /api/notify-progress every 3 seconds
+//      to show a live progress bar
+//
+// WHY BATCH LIMIT + RANDOM DELAY?
+//   WhatsApp tracks how fast messages leave your account.
+//   Sending 80 messages in 2 minutes = flagged as spam = number blocked.
+//   With 20-45 second random gaps, 30 messages takes ~15-20 minutes
+//   but looks completely human to WhatsApp.
 // ----------------------------------------------------------
 app.post('/api/notify-all-ready', async (req, res) => {
   if (!whatsappReady) {
@@ -320,49 +379,89 @@ app.post('/api/notify-all-ready', async (req, res) => {
     });
   }
 
+  // Don't allow two bulk sends at the same time
+  if (notifyProgress.running) {
+    return res.status(409).json({
+      error: 'A bulk send is already running. Check the progress bar.'
+    });
+  }
+
   try {
-    // Fetch all orders that are "ready" but not yet notified
-    const [orders] = await db.query(
+    // Fetch all ready, unnotified orders
+    const [allOrders] = await db.query(
       "SELECT * FROM orders WHERE status = 'ready' AND notified = 0"
     );
 
-    if (orders.length === 0) {
-      return res.json({ message: 'No pending notifications to send', count: 0 });
+    if (allOrders.length === 0) {
+      return res.json({ message: 'No pending notifications to send', total: 0, queued: 0 });
     }
 
-    const results = [];
+    // Take only the first MAX_BULK_PER_RUN orders this session
+    // The rest will be sent next time the button is clicked
+    const toSend       = allOrders.slice(0, MAX_BULK_PER_RUN);
+    const queuedCount  = allOrders.length - toSend.length;
 
-    // Loop through each order and send a WhatsApp message
-    // CONCEPT: "for...of" loop lets us use await inside it
-    for (const order of orders) {
+    // Reset and initialize progress
+    notifyProgress = {
+      running:     true,
+      total:       toSend.length,
+      sent:        0,
+      failed:      0,
+      queued:      queuedCount,
+      currentName: toSend[0]?.customer_name || '',
+      results:     [],
+      finishedAt:  null
+    };
+
+    // Send the HTTP response NOW — frontend gets this instantly
+    // The loop below keeps running after this line
+    res.json({
+      message:  `Starting — sending ${toSend.length} messages`,
+      total:    toSend.length,
+      queued:   queuedCount
+    });
+
+    // --- BACKGROUND SEND LOOP ---
+    // This runs AFTER the response was sent.
+    // Node.js is single-threaded but non-blocking: await randomDelay()
+    // yields control back so other requests (like /api/notify-progress)
+    // can be handled while we wait between messages.
+    for (let i = 0; i < toSend.length; i++) {
+      const order = toSend[i];
+      notifyProgress.currentName = order.customer_name;
+
       try {
         const whatsappNumber = formatPhoneForWhatsApp(order.phone);
-        const message = buildMessage(order.customer_name);
+        const message        = buildMessage(order.customer_name);
 
         await whatsappClient.sendMessage(whatsappNumber, message);
-
-        // Mark as notified in the database
         await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [order.id]);
 
-        results.push({ id: order.id, name: order.customer_name, success: true });
+        notifyProgress.sent++;
+        notifyProgress.results.push({ name: order.customer_name, success: true });
+        console.log(`✅ [${notifyProgress.sent}/${notifyProgress.total}] Sent to ${order.customer_name}`);
 
-        // Wait 2 seconds between messages to avoid WhatsApp spam detection
-        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (err) {
-        // If one message fails, log it but continue with others
-        console.error(`Failed to notify ${order.customer_name}:`, err.message);
-        results.push({ id: order.id, name: order.customer_name, success: false });
+        notifyProgress.failed++;
+        notifyProgress.results.push({ name: order.customer_name, success: false });
+        console.error(`❌ Failed: ${order.customer_name} — ${err.message}`);
+      }
+
+      // Wait a random delay before the NEXT message (skip wait after last one)
+      if (i < toSend.length - 1) {
+        await randomDelay();
       }
     }
 
-    res.json({
-      message: `Notification process complete`,
-      count: results.filter((r) => r.success).length,
-      results
-    });
+    // Mark send as complete
+    notifyProgress.running     = false;
+    notifyProgress.currentName = '';
+    notifyProgress.finishedAt  = new Date().toISOString();
+    console.log(`\n🏁 Bulk send done: ${notifyProgress.sent} sent, ${notifyProgress.failed} failed\n`);
+
   } catch (error) {
+    notifyProgress.running = false;
     console.error('Error in bulk notify:', error);
-    res.status(500).json({ error: 'Bulk notification failed' });
   }
 });
 
