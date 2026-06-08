@@ -169,6 +169,19 @@ function updateStats(orders) {
 
 
 // ============================================================
+// NOTIFIED BADGE — Three possible states:
+//   0 = not sent yet
+//   1 = successfully sent
+//   2 = permanently skipped (number not on WhatsApp)
+// ============================================================
+function notifiedBadge(value) {
+  if (value == 1) return '<span class="badge badge-yes">✓ Sent</span>';
+  if (value == 2) return '<span class="badge badge-no-whatsapp">⚠️ Not on WhatsApp</span>';
+  return '<span class="badge badge-no">Not Sent</span>';
+}
+
+
+// ============================================================
 // RENDER ORDER ROWS — Build HTML for each row in the table
 // ============================================================
 function renderOrderRows(orders) {
@@ -189,11 +202,7 @@ function renderOrderRows(orders) {
       <td><strong>${escapeHtml(order.customer_name)}</strong></td>
       <td>${escapeHtml(order.phone)}</td>
       <td><span class="badge badge-${order.status}">${statusLabel(order.status)}</span></td>
-      <td>
-        <span class="badge ${order.notified ? 'badge-yes' : 'badge-no'}">
-          ${order.notified ? '✓ Sent' : 'Not Sent'}
-        </span>
-      </td>
+      <td>${notifiedBadge(order.notified)}</td>
       <td style="color: var(--color-muted); font-size: 0.82rem;">${formatDate(order.created_at)}</td>
       <td><div class="actions-cell">${actionButtons}</div></td>
     `;

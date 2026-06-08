@@ -124,31 +124,49 @@ function normalizePhone(phone) {
 // ============================================================
 // HELPER: Verify number and send a WhatsApp message
 //
-// WHY getNumberId() instead of just adding @c.us manually?
+// Returns one of three result objects — never throws:
+//   { sent: true }
+//       → message delivered successfully
+//   { sent: false, permanent: true, reason: '...' }
+//       → number not on WhatsApp — mark as permanently skipped
+//         so the bulk loop never retries this number again
+//   { sent: false, permanent: false, reason: '...' }
+//       → temporary error (network glitch etc.) — may succeed next run
 //
-//   The old way:  "919876543210" + "@c.us"  ← WhatsApp may not recognise this
-//   The new way:  getNumberId("919876543210") ← WhatsApp VERIFIES the number
-//                 exists on its network and returns the correct internal ID.
-//
-//   "No LID for user" error = WhatsApp couldn't find the number.
-//   getNumberId() catches this early and gives a clear error instead.
-//
-// Returns: { success: true } or throws an Error with a readable message
+// WHY return instead of throw?
+//   In the bulk loop, a "not on WhatsApp" failure is PERMANENT.
+//   We need to treat it differently from a temporary network error.
+//   Returning a typed result makes this easy to check.
 // ============================================================
 async function sendWhatsApp(phone, message) {
   const digits = normalizePhone(phone);
 
-  // Ask WhatsApp: "Is this number registered?"
-  // Returns an ID object if yes, returns null if the number is not on WhatsApp
-  const numberId = await whatsappClient.getNumberId(digits);
+  try {
+    // getNumberId() asks WhatsApp: "Is this number registered?"
+    // Returns an ID object if yes, returns null if not on WhatsApp
+    const numberId = await whatsappClient.getNumberId(digits);
 
-  if (!numberId) {
-    // Number doesn't exist on WhatsApp — give a clear error
-    throw new Error(`${phone} is not registered on WhatsApp`);
+    if (!numberId) {
+      // PERMANENT failure — this number will never be on WhatsApp
+      return {
+        sent:      false,
+        permanent: true,
+        reason:    `${phone} is not registered on WhatsApp`
+      };
+    }
+
+    // numberId._serialized is the verified address, e.g. "919876543210@c.us"
+    await whatsappClient.sendMessage(numberId._serialized, message);
+    return { sent: true };
+
+  } catch (err) {
+    // Temporary error (network, WhatsApp rate limit, etc.)
+    return {
+      sent:      false,
+      permanent: false,
+      reason:    err.message
+    };
   }
-
-  // numberId._serialized is the verified WhatsApp address e.g. "919876543210@c.us"
-  await whatsappClient.sendMessage(numberId._serialized, message);
 }
 
 // ============================================================
@@ -362,21 +380,22 @@ app.post('/api/orders/:id/notify', async (req, res) => {
     }
 
     const order = rows[0];
-
-    // Build the message text
     const message = buildMessage(order.customer_name);
+    const result  = await sendWhatsApp(order.phone, message);
 
-    // sendWhatsApp() verifies the number exists on WhatsApp,
-    // then sends — throws a clear error if number not found
-    await sendWhatsApp(order.phone, message);
+    if (result.sent) {
+      await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [id]);
+      return res.json({ message: `WhatsApp sent to ${order.customer_name}` });
+    }
 
-    // Mark this order as "notified" in the database
-    await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [id]);
+    if (result.permanent) {
+      // Mark notified = 2 (permanently invalid) so bulk send never retries this
+      await db.query('UPDATE orders SET notified = 2 WHERE id = ?', [id]);
+    }
 
-    res.json({ message: `WhatsApp sent to ${order.customer_name}` });
+    return res.status(400).json({ error: result.reason });
   } catch (error) {
-    console.error('Error sending WhatsApp:', error);
-    // Pass the actual error message to the frontend so you can see what went wrong
+    console.error('Error in single notify:', error);
     res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
 });
@@ -455,26 +474,30 @@ app.post('/api/notify-all-ready', async (req, res) => {
       const order = toSend[i];
       notifyProgress.currentName = order.customer_name;
 
-      try {
-        const message = buildMessage(order.customer_name);
+      const message = buildMessage(order.customer_name);
+      const result  = await sendWhatsApp(order.phone, message);
 
-        // sendWhatsApp() verifies the number first, then sends
-        await sendWhatsApp(order.phone, message);
+      if (result.sent) {
+        // ✅ Success — mark as notified
         await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [order.id]);
-
         notifyProgress.sent++;
         notifyProgress.results.push({ name: order.customer_name, success: true });
         console.log(`✅ [${notifyProgress.sent}/${notifyProgress.total}] Sent to ${order.customer_name}`);
 
-      } catch (err) {
+      } else if (result.permanent) {
+        // ❌ Permanent failure — number is not on WhatsApp, will never work.
+        // Set notified = 2 so this row is NEVER picked up by bulk send again.
+        // This stops the infinite retry loop.
+        await db.query('UPDATE orders SET notified = 2 WHERE id = ?', [order.id]);
         notifyProgress.failed++;
-        notifyProgress.results.push({
-          name:   order.customer_name,
-          phone:  order.phone,
-          success: false,
-          reason: err.message   // e.g. "09123456789 is not registered on WhatsApp"
-        });
-        console.error(`❌ Failed: ${order.customer_name} — ${err.message}`);
+        notifyProgress.results.push({ name: order.customer_name, success: false, permanent: true });
+        console.warn(`⚠️  Permanently skipped ${order.customer_name} — ${result.reason}`);
+
+      } else {
+        // ⚠️  Temporary failure — keep notified = 0 so it's retried next run
+        notifyProgress.failed++;
+        notifyProgress.results.push({ name: order.customer_name, success: false, permanent: false });
+        console.error(`❌ Temp failure: ${order.customer_name} — ${result.reason}`);
       }
 
       // Wait a random delay before the NEXT message (skip wait after last one)

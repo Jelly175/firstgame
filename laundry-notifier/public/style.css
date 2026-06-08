@@ -359,8 +359,9 @@ tr:hover td { background: #f8fafc; }
 .badge-ready     { background: #dcfce7; color: #15803d; }
 .badge-picked_up { background: #ede9fe; color: #6d28d9; }
 
-.badge-yes { background: #dcfce7; color: #15803d; }
-.badge-no  { background: #f1f5f9; color: var(--color-muted); }
+.badge-yes          { background: #dcfce7; color: #15803d; }
+.badge-no           { background: #f1f5f9; color: var(--color-muted); }
+.badge-no-whatsapp  { background: #fff7ed; color: #c2410c; }
 
 .actions-cell {
   display: flex;
