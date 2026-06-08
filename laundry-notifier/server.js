@@ -101,33 +101,54 @@ whatsappClient.on('disconnected', (reason) => {
 whatsappClient.initialize();
 
 // ============================================================
-// HELPER FUNCTION: Normalize Indian phone number for WhatsApp
+// HELPER: Normalize Indian phone number to plain digits
 //
-// WhatsApp needs numbers in this format: "919876543210@c.us"
-// (country code 91 + 10-digit number, no + sign, then @c.us)
-//
-// This function handles ALL common Indian formats automatically:
-//   09876543210   (starts with 0, 11 digits) → 919876543210@c.us
-//   9876543210    (10 digits, no 0)           → 919876543210@c.us
-//   919876543210  (already has 91, 12 digits) → 919876543210@c.us
-//   +919876543210 (has +91)                   → 919876543210@c.us
+// Handles all common Indian formats:
+//   09876543210   (starts with 0, 11 digits) → 919876543210
+//   9876543210    (10 digits, no 0)           → 919876543210
+//   919876543210  (already has 91, 12 digits) → 919876543210
+//   +919876543210 (has +91)                   → 919876543210
 // ============================================================
-function formatPhoneForWhatsApp(phone) {
-  // Step 1: Strip everything that is not a digit (removes +, spaces, dashes, brackets)
-  let cleaned = phone.replace(/\D/g, '');
+function normalizePhone(phone) {
+  let cleaned = phone.replace(/\D/g, ''); // Remove +, spaces, dashes, brackets
 
-  // Step 2: Normalize to 12-digit format (91 + 10 digits)
   if (cleaned.startsWith('0') && cleaned.length === 11) {
-    // e.g. 09876543210 → remove leading 0, add country code 91
-    cleaned = '91' + cleaned.slice(1);
+    cleaned = '91' + cleaned.slice(1); // 09876543210 → 919876543210
   } else if (cleaned.length === 10) {
-    // e.g. 9876543210 → just add country code 91
-    cleaned = '91' + cleaned;
+    cleaned = '91' + cleaned;          // 9876543210  → 919876543210
   }
-  // If already 12 digits starting with 91 → leave as-is
 
-  // Step 3: Add WhatsApp's required suffix
-  return cleaned + '@c.us';
+  return cleaned; // Just plain digits — no @c.us yet
+}
+
+// ============================================================
+// HELPER: Verify number and send a WhatsApp message
+//
+// WHY getNumberId() instead of just adding @c.us manually?
+//
+//   The old way:  "919876543210" + "@c.us"  ← WhatsApp may not recognise this
+//   The new way:  getNumberId("919876543210") ← WhatsApp VERIFIES the number
+//                 exists on its network and returns the correct internal ID.
+//
+//   "No LID for user" error = WhatsApp couldn't find the number.
+//   getNumberId() catches this early and gives a clear error instead.
+//
+// Returns: { success: true } or throws an Error with a readable message
+// ============================================================
+async function sendWhatsApp(phone, message) {
+  const digits = normalizePhone(phone);
+
+  // Ask WhatsApp: "Is this number registered?"
+  // Returns an ID object if yes, returns null if the number is not on WhatsApp
+  const numberId = await whatsappClient.getNumberId(digits);
+
+  if (!numberId) {
+    // Number doesn't exist on WhatsApp — give a clear error
+    throw new Error(`${phone} is not registered on WhatsApp`);
+  }
+
+  // numberId._serialized is the verified WhatsApp address e.g. "919876543210@c.us"
+  await whatsappClient.sendMessage(numberId._serialized, message);
 }
 
 // ============================================================
@@ -342,14 +363,12 @@ app.post('/api/orders/:id/notify', async (req, res) => {
 
     const order = rows[0];
 
-    // Format the phone number for WhatsApp
-    const whatsappNumber = formatPhoneForWhatsApp(order.phone);
-
     // Build the message text
     const message = buildMessage(order.customer_name);
 
-    // Send the message via WhatsApp!
-    await whatsappClient.sendMessage(whatsappNumber, message);
+    // sendWhatsApp() verifies the number exists on WhatsApp,
+    // then sends — throws a clear error if number not found
+    await sendWhatsApp(order.phone, message);
 
     // Mark this order as "notified" in the database
     await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [id]);
@@ -357,7 +376,8 @@ app.post('/api/orders/:id/notify', async (req, res) => {
     res.json({ message: `WhatsApp sent to ${order.customer_name}` });
   } catch (error) {
     console.error('Error sending WhatsApp:', error);
-    res.status(500).json({ error: 'Failed to send WhatsApp message. Check if the number is valid.' });
+    // Pass the actual error message to the frontend so you can see what went wrong
+    res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
 });
 
@@ -436,10 +456,10 @@ app.post('/api/notify-all-ready', async (req, res) => {
       notifyProgress.currentName = order.customer_name;
 
       try {
-        const whatsappNumber = formatPhoneForWhatsApp(order.phone);
-        const message        = buildMessage(order.customer_name);
+        const message = buildMessage(order.customer_name);
 
-        await whatsappClient.sendMessage(whatsappNumber, message);
+        // sendWhatsApp() verifies the number first, then sends
+        await sendWhatsApp(order.phone, message);
         await db.query('UPDATE orders SET notified = 1 WHERE id = ?', [order.id]);
 
         notifyProgress.sent++;
@@ -448,7 +468,12 @@ app.post('/api/notify-all-ready', async (req, res) => {
 
       } catch (err) {
         notifyProgress.failed++;
-        notifyProgress.results.push({ name: order.customer_name, success: false });
+        notifyProgress.results.push({
+          name:   order.customer_name,
+          phone:  order.phone,
+          success: false,
+          reason: err.message   // e.g. "09123456789 is not registered on WhatsApp"
+        });
         console.error(`❌ Failed: ${order.customer_name} — ${err.message}`);
       }
 
