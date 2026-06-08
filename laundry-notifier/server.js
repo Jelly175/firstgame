@@ -151,13 +151,18 @@ function buildMessage(customerName) {
     //`Thank you for choosing us! 🙏\n` +
     //`— Your Laundry Store`
 
-    `Hi Sir 👋 \n\n` +
-    `We are working with laundry & dry cleaning stores to simplify daily operations like: \n` +
-    `• order tracking \n` +
-    `• pending payments \n` +
-    `• delivery management \n` +
-    `• customer WhatsApp updates \n\n` +
-    `Wanted to understand — how are you currently managing your laundry operations? `
+  //  `Hi Sir 👋 \n\n` +
+    //`We are working with laundry & dry cleaning stores to simplify daily operations like: \n` +
+    //`• order tracking \n` +
+    //`• pending payments \n` +
+    //`• delivery management \n` +
+    //`• customer WhatsApp updates \n\n` +
+    //`Wanted to understand — how are you currently managing your laundry operations? `
+
+    `हेलो सर 👋 \n\n` +
+    `लॉन्ड्री बिज़नेस में कपड़ों की टैगिंग, पेंडिंग पेमेंट्स और कस्टमर्स को बार-बार अपडेट देने में काफी समय चला जाता है। हम इसी काम को पूरी तरह ऑटोमैटिक और आसान बनाने में स्टोर्स की मदद करते हैं। \n\n` +
+    `क्या आप अभी इसके लिए कोई सॉफ्टवेयर इस्तेमाल कर रहे हैं या सब मैनुअल (डायरी में) होता है? \n\n` +
+    `Fabric First`
   );
 }
 
